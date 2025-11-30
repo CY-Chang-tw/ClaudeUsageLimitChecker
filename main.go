@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -92,8 +91,15 @@ func (m *Monitor) checkUsage(ctx context.Context) {
 		return
 	}
 
-	log.Printf("Usage Stats: %.1f%% (%s period) - Resets at: %s",
-		stats.UsagePercentage, stats.PeriodType, stats.ResetsAt.Format("2006-01-02 15:04 MST"))
+	// Log both periods if available
+	if stats.HasFiveHour && stats.HasSevenDay {
+		log.Printf("Usage Stats - 5-hour: %.1f%%, 7-day: %.1f%% (Primary: %s)",
+			stats.FiveHourUsage, stats.SevenDayUsage, stats.PeriodType)
+	} else if stats.HasFiveHour {
+		log.Printf("Usage Stats - 5-hour: %.1f%%", stats.FiveHourUsage)
+	} else if stats.HasSevenDay {
+		log.Printf("Usage Stats - 7-day: %.1f%%", stats.SevenDayUsage)
+	}
 
 	// Check if we need to send notifications
 	m.checkThresholds(stats)
@@ -106,15 +112,7 @@ func (m *Monitor) checkThresholds(stats *api.UsageStats) {
 			if m.shouldNotify(threshold) {
 				log.Printf("Usage exceeded %.0f%% threshold, sending notification...", threshold)
 
-				periodInfo := fmt.Sprintf("%s (resets: %s)", stats.PeriodType,
-					stats.ResetsAt.Format("Jan 02, 15:04 MST"))
-
-				err := m.discordNotifier.SendUsageAlert(
-					stats.UsagePercentage,
-					100.0,
-					stats.UsagePercentage,
-					periodInfo,
-				)
+				err := m.discordNotifier.SendUsageAlert(stats)
 
 				if err != nil {
 					log.Printf("Failed to send Discord notification: %v", err)

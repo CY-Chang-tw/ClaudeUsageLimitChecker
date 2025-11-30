@@ -26,11 +26,17 @@ type UsagePeriod struct {
 }
 
 type UsageStats struct {
-	CurrentUsage    float64
-	UsagePercentage float64
-	PeriodType      string
-	ResetsAt        time.Time
-	LastChecked     time.Time
+	CurrentUsage      float64
+	UsagePercentage   float64
+	PeriodType        string
+	ResetsAt          time.Time
+	LastChecked       time.Time
+	FiveHourUsage     float64
+	FiveHourResetsAt  *time.Time
+	SevenDayUsage     float64
+	SevenDayResetsAt  *time.Time
+	HasFiveHour       bool
+	HasSevenDay       bool
 }
 
 func NewClient(sessionKey, orgID string) *Client {
@@ -76,22 +82,37 @@ func (c *Client) GetUsage() (*UsageStats, error) {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Prioritize seven_day over five_hour
+	// Capture both periods
 	stats := &UsageStats{
 		LastChecked: time.Now(),
 	}
 
+	// Capture 5-hour data
+	if usageResp.FiveHour != nil {
+		stats.FiveHourUsage = usageResp.FiveHour.Utilization
+		stats.FiveHourResetsAt = usageResp.FiveHour.ResetsAt
+		stats.HasFiveHour = true
+	}
+
+	// Capture 7-day data
 	if usageResp.SevenDay != nil {
-		stats.UsagePercentage = usageResp.SevenDay.Utilization
+		stats.SevenDayUsage = usageResp.SevenDay.Utilization
+		stats.SevenDayResetsAt = usageResp.SevenDay.ResetsAt
+		stats.HasSevenDay = true
+	}
+
+	// Prioritize seven_day over five_hour for primary metric
+	if stats.HasSevenDay {
+		stats.UsagePercentage = stats.SevenDayUsage
 		stats.PeriodType = "7-day"
-		if usageResp.SevenDay.ResetsAt != nil {
-			stats.ResetsAt = *usageResp.SevenDay.ResetsAt
+		if stats.SevenDayResetsAt != nil {
+			stats.ResetsAt = *stats.SevenDayResetsAt
 		}
-	} else if usageResp.FiveHour != nil {
-		stats.UsagePercentage = usageResp.FiveHour.Utilization
+	} else if stats.HasFiveHour {
+		stats.UsagePercentage = stats.FiveHourUsage
 		stats.PeriodType = "5-hour"
-		if usageResp.FiveHour.ResetsAt != nil {
-			stats.ResetsAt = *usageResp.FiveHour.ResetsAt
+		if stats.FiveHourResetsAt != nil {
+			stats.ResetsAt = *stats.FiveHourResetsAt
 		}
 	} else {
 		return nil, fmt.Errorf("no usage data available")

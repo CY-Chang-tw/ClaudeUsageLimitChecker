@@ -237,16 +237,23 @@ The app prioritizes monitoring the 7-day limit over the 5-hour limit.
 
 ## Notification Format
 
-Notifications include:
-- **Current Usage**: Your current usage percentage
-- **Limit**: 100% (the maximum)
-- **Usage Percentage**: Your current utilization
-- **Period Information**: Time period type and reset time
-- **Color Coding**:
-  - 🟢 Green: < 80%
-  - 🟡 Yellow: 80-89%
-  - 🟠 Orange: 90-94%
-  - 🔴 Red: ≥ 95%
+Notifications include both usage periods with detailed information:
+
+**📊 Current Session (5-hour)**
+- Usage percentage for the current 5-hour window
+- Reset time (when the 5-hour period renews)
+
+**📈 Weekly Limits (7-day)**
+- Usage percentage for the 7-day period
+- Reset time (when the weekly limit renews)
+
+**Color Coding** (based on primary monitored period):
+- 🟢 Green: < 80%
+- 🟡 Yellow: 80-89%
+- 🟠 Orange: 90-94%
+- 🔴 Red: ≥ 95%
+
+The notification footer indicates which period is being used as the primary monitor for threshold alerts (prioritizes 7-day over 5-hour).
 
 ## Important Notes
 

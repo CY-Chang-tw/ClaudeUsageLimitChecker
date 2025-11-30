@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/CY-Chang-tw/ClaudeUsageLimitChecker/api"
 )
 
 type DiscordNotifier struct {
@@ -53,39 +55,60 @@ func NewDiscordNotifier(webhookURL string) *DiscordNotifier {
 	}
 }
 
-func (d *DiscordNotifier) SendUsageAlert(currentUsage, maxLimit, percentage float64, billingPeriod string) error {
-	color := d.getColorForPercentage(percentage)
-	emoji := d.getEmojiForPercentage(percentage)
+func (d *DiscordNotifier) SendUsageAlert(stats *api.UsageStats) error {
+	// Use the primary period (7-day or 5-hour) for color coding
+	color := d.getColorForPercentage(stats.UsagePercentage)
+	emoji := d.getEmojiForPercentage(stats.UsagePercentage)
+
+	// Build fields array
+	fields := []DiscordEmbedField{}
+
+	// Add 5-hour usage (Current session) if available
+	if stats.HasFiveHour {
+		fields = append(fields, DiscordEmbedField{
+			Name:   "📊 Current Session (5-hour)",
+			Value:  fmt.Sprintf("**%.1f%%**", stats.FiveHourUsage),
+			Inline: true,
+		})
+		if stats.FiveHourResetsAt != nil {
+			fields = append(fields, DiscordEmbedField{
+				Name:   "⏰ Resets At",
+				Value:  stats.FiveHourResetsAt.Format("Jan 02, 15:04 MST"),
+				Inline: true,
+			})
+		}
+		// Add empty field for spacing
+		fields = append(fields, DiscordEmbedField{
+			Name:   "\u200b",
+			Value:  "\u200b",
+			Inline: true,
+		})
+	}
+
+	// Add 7-day usage (Weekly limits) if available
+	if stats.HasSevenDay {
+		fields = append(fields, DiscordEmbedField{
+			Name:   "📈 Weekly Limits (7-day)",
+			Value:  fmt.Sprintf("**%.1f%%**", stats.SevenDayUsage),
+			Inline: true,
+		})
+		if stats.SevenDayResetsAt != nil {
+			fields = append(fields, DiscordEmbedField{
+				Name:   "⏰ Resets At",
+				Value:  stats.SevenDayResetsAt.Format("Jan 02, 15:04 MST"),
+				Inline: true,
+			})
+		}
+	}
 
 	embed := DiscordEmbed{
 		Title:       fmt.Sprintf("%s Claude Usage Alert", emoji),
-		Description: d.getAlertMessage(percentage),
+		Description: d.getAlertMessage(stats.UsagePercentage),
 		Color:       color,
-		Fields: []DiscordEmbedField{
-			{
-				Name:   "Current Usage",
-				Value:  fmt.Sprintf("%.2f", currentUsage),
-				Inline: true,
-			},
-			{
-				Name:   "Limit",
-				Value:  fmt.Sprintf("%.2f", maxLimit),
-				Inline: true,
-			},
-			{
-				Name:   "Usage Percentage",
-				Value:  fmt.Sprintf("%.1f%%", percentage),
-				Inline: true,
-			},
-			{
-				Name:   "Billing Period",
-				Value:  billingPeriod,
-				Inline: false,
-			},
-		},
-		Timestamp: time.Now().Format(time.RFC3339),
+		Fields:      fields,
+		Timestamp:   time.Now().Format(time.RFC3339),
 		Footer: &DiscordEmbedFooter{
-			Text: "Claude Usage Monitor",
+			Text: fmt.Sprintf("Primary Monitor: %s", stats.PeriodType),
 		},
 	}
 
