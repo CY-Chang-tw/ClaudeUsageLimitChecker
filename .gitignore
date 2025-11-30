@@ -1,0 +1,45 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+ClaudeUsageLimitChecker
+
+# Test binary
+*.test
+
+# Output of go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Environment variables - IMPORTANT: Never commit this!
+.env
+
+# Project roadmap (personal planning)
+roadmap.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Chrome profile data
+.chrome-profile/
+
+# Endpoint documentation with sensitive data
+Endpoint.md
