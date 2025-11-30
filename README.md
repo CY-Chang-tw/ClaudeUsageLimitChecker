@@ -113,6 +113,100 @@ Double-click `start-silent.vbs` in Windows Explorer
 3. Copy `start-silent.vbs` to that folder
 4. It will start automatically on every login!
 
+### Deploy on Linux Server/VPS (Recommended for 24/7 monitoring):
+
+#### Automated Installation (Easiest)
+
+```bash
+# Clone the repository
+git clone https://github.com/CY-Chang-tw/ClaudeUsageLimitChecker.git
+cd ClaudeUsageLimitChecker
+
+# Run the installation script
+chmod +x install.sh
+./install.sh
+```
+
+The script will:
+- ✅ Check and install Go if needed
+- ✅ Build the application
+- ✅ Create `.env` file and prompt for credentials
+- ✅ Create systemd service for auto-start
+- ✅ Start the monitor immediately
+
+#### Manual Installation
+
+```bash
+# 1. Clone and build
+git clone https://github.com/CY-Chang-tw/ClaudeUsageLimitChecker.git
+cd ClaudeUsageLimitChecker
+go mod download
+go build -o ClaudeUsageLimitChecker
+
+# 2. Configure
+cp .env.example .env
+nano .env  # Add your credentials
+
+# 3. Create systemd service
+sudo nano /etc/systemd/system/claude-monitor.service
+```
+
+Add this content (replace `your-username` and paths):
+```ini
+[Unit]
+Description=Claude Usage Limit Checker
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/home/your-username/ClaudeUsageLimitChecker
+ExecStart=/home/your-username/ClaudeUsageLimitChecker/ClaudeUsageLimitChecker
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable claude-monitor
+sudo systemctl start claude-monitor
+sudo systemctl status claude-monitor
+```
+
+#### Linux Service Management
+
+```bash
+# View logs
+sudo journalctl -u claude-monitor -f
+
+# Restart service
+sudo systemctl restart claude-monitor
+
+# Stop service
+sudo systemctl stop claude-monitor
+
+# Check status
+sudo systemctl status claude-monitor
+```
+
+#### Alternative: Run with screen (Simpler, no systemd)
+
+```bash
+# Install screen
+sudo apt install screen -y
+
+# Start screen session
+screen -S claude-monitor
+./ClaudeUsageLimitChecker
+
+# Detach: Press Ctrl+A, then D
+# Reattach: screen -r claude-monitor
+```
+
 ## How It Works
 
 1. **API Request**: Makes HTTP GET request to `https://claude.ai/api/organizations/{org-id}/usage`
