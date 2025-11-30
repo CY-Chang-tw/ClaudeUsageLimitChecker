@@ -71,7 +71,9 @@ WARNING_LEVELS=80,90,95
 | `DISCORD_WEBHOOK_URL` | Your Discord webhook URL | - | ✅ Yes |
 | `USAGE_THRESHOLD` | Primary usage threshold percentage | 80 | No |
 | `CHECK_INTERVAL` | Check interval in minutes | 60 | No |
-| `WARNING_LEVELS` | Comma-separated warning percentages | 80,90,95 | No |
+| `WARNING_LEVELS` | Comma-separated warning percentages (fallback) | 80,90,95 | No |
+| `FIVE_HOUR_WARNING_LEVELS` | Thresholds for 5-hour period (optional) | WARNING_LEVELS | No |
+| `SEVEN_DAY_WARNING_LEVELS` | Thresholds for 7-day period (optional) | WARNING_LEVELS | No |
 
 ### Setting up Discord Webhook
 
@@ -212,9 +214,9 @@ screen -S claude-monitor
 1. **API Request**: Makes HTTP GET request to `https://claude.ai/api/organizations/{org-id}/usage`
 2. **Authentication**: Uses your session key from cookies for authentication
 3. **Data Parsing**: Parses JSON response containing usage data for different time periods
-4. **Threshold Checking**: Compares current usage percentage against configured thresholds
+4. **Threshold Checking**: Compares current usage percentage against configured thresholds for each period
 5. **Discord Alerts**: Sends color-coded notifications when thresholds are exceeded
-6. **Cooldown Period**: Prevents sending the same alert multiple times within an hour
+6. **Cooldown Period**: Prevents spam with period-specific cooldowns (5-hour: 30min, 7-day: 1hr)
 
 ## API Response Format
 

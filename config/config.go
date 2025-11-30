@@ -10,12 +10,14 @@ import (
 )
 
 type Config struct {
-	ClaudeSessionKey  string
-	ClaudeOrgID       string
-	DiscordWebhookURL string
-	UsageThreshold    float64
-	CheckInterval     int
-	WarningLevels     []float64
+	ClaudeSessionKey        string
+	ClaudeOrgID             string
+	DiscordWebhookURL       string
+	UsageThreshold          float64
+	CheckInterval           int
+	WarningLevels           []float64
+	FiveHourWarningLevels   []float64
+	SevenDayWarningLevels   []float64
 }
 
 func Load() (*Config, error) {
@@ -50,19 +52,27 @@ func Load() (*Config, error) {
 	}
 	cfg.CheckInterval = interval
 
-	// Parse warning levels
+	// Parse warning levels (general fallback)
 	levelsStr := os.Getenv("WARNING_LEVELS")
 	if levelsStr == "" {
 		levelsStr = "80,90,95"
 	}
-	levelStrs := strings.Split(levelsStr, ",")
-	cfg.WarningLevels = make([]float64, 0, len(levelStrs))
-	for _, ls := range levelStrs {
-		level, err := strconv.ParseFloat(strings.TrimSpace(ls), 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid WARNING_LEVELS: %w", err)
-		}
-		cfg.WarningLevels = append(cfg.WarningLevels, level)
+	cfg.WarningLevels = parseWarningLevels(levelsStr)
+
+	// Parse 5-hour warning levels (fallback to general WARNING_LEVELS if not set)
+	fiveHourLevelsStr := os.Getenv("FIVE_HOUR_WARNING_LEVELS")
+	if fiveHourLevelsStr != "" {
+		cfg.FiveHourWarningLevels = parseWarningLevels(fiveHourLevelsStr)
+	} else {
+		cfg.FiveHourWarningLevels = cfg.WarningLevels
+	}
+
+	// Parse 7-day warning levels (fallback to general WARNING_LEVELS if not set)
+	sevenDayLevelsStr := os.Getenv("SEVEN_DAY_WARNING_LEVELS")
+	if sevenDayLevelsStr != "" {
+		cfg.SevenDayWarningLevels = parseWarningLevels(sevenDayLevelsStr)
+	} else {
+		cfg.SevenDayWarningLevels = cfg.WarningLevels
 	}
 
 	// Validate configuration
@@ -71,6 +81,18 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func parseWarningLevels(levelsStr string) []float64 {
+	levelStrs := strings.Split(levelsStr, ",")
+	levels := make([]float64, 0, len(levelStrs))
+	for _, ls := range levelStrs {
+		level, err := strconv.ParseFloat(strings.TrimSpace(ls), 64)
+		if err == nil && level >= 0 && level <= 100 {
+			levels = append(levels, level)
+		}
+	}
+	return levels
 }
 
 func (c *Config) Validate() error {

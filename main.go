@@ -13,11 +13,16 @@ import (
 	"github.com/CY-Chang-tw/ClaudeUsageLimitChecker/notifier"
 )
 
+type ThresholdKey struct {
+	Threshold float64
+	Period    string  // "5-hour", "7-day", or "both"
+}
+
 type Monitor struct {
 	config         *config.Config
 	apiClient      *api.Client
 	discordNotifier *notifier.DiscordNotifier
-	lastNotified   map[float64]time.Time
+	lastNotified   map[ThresholdKey]time.Time
 }
 
 func main() {
@@ -34,7 +39,7 @@ func main() {
 		config:          cfg,
 		apiClient:       api.NewClient(cfg.ClaudeSessionKey, cfg.ClaudeOrgID),
 		discordNotifier: notifier.NewDiscordNotifier(cfg.DiscordWebhookURL),
-		lastNotified:    make(map[float64]time.Time),
+		lastNotified:    make(map[ThresholdKey]time.Time),
 	}
 
 	// Send test notification
@@ -106,19 +111,76 @@ func (m *Monitor) checkUsage(ctx context.Context) {
 }
 
 func (m *Monitor) checkThresholds(stats *api.UsageStats) {
-	for _, threshold := range m.config.WarningLevels {
-		if stats.UsagePercentage >= threshold {
-			// Check if we already notified for this threshold recently
-			if m.shouldNotify(threshold) {
-				log.Printf("Usage exceeded %.0f%% threshold, sending notification...", threshold)
+	// Combine both threshold lists and remove duplicates
+	thresholdMap := make(map[float64]bool)
+
+	// Add 5-hour thresholds
+	if stats.HasFiveHour {
+		for _, t := range m.config.FiveHourWarningLevels {
+			thresholdMap[t] = true
+		}
+	}
+
+	// Add 7-day thresholds
+	if stats.HasSevenDay {
+		for _, t := range m.config.SevenDayWarningLevels {
+			thresholdMap[t] = true
+		}
+	}
+
+	// Convert to sorted slice
+	thresholds := make([]float64, 0, len(thresholdMap))
+	for t := range thresholdMap {
+		thresholds = append(thresholds, t)
+	}
+
+	// Sort in descending order (check highest first)
+	for i := 0; i < len(thresholds); i++ {
+		for j := i + 1; j < len(thresholds); j++ {
+			if thresholds[i] < thresholds[j] {
+				thresholds[i], thresholds[j] = thresholds[j], thresholds[i]
+			}
+		}
+	}
+
+	// Check each threshold
+	for _, threshold := range thresholds {
+		// Check if this threshold applies to 5-hour and if it's exceeded
+		fiveHourApplies := stats.HasFiveHour && containsThreshold(m.config.FiveHourWarningLevels, threshold)
+		fiveHourExceeds := fiveHourApplies && stats.FiveHourUsage >= threshold
+
+		// Check if this threshold applies to 7-day and if it's exceeded
+		sevenDayApplies := stats.HasSevenDay && containsThreshold(m.config.SevenDayWarningLevels, threshold)
+		sevenDayExceeds := sevenDayApplies && stats.SevenDayUsage >= threshold
+
+		if fiveHourExceeds || sevenDayExceeds {
+			// Determine the period for this threshold
+			var period string
+			if fiveHourExceeds && sevenDayExceeds {
+				period = "both"
+			} else if fiveHourExceeds {
+				period = "5-hour"
+			} else {
+				period = "7-day"
+			}
+
+			// Create threshold key for cooldown tracking
+			key := ThresholdKey{
+				Threshold: threshold,
+				Period:    period,
+			}
+
+			// Check if we already notified for this threshold+period combination recently
+			if m.shouldNotify(key) {
+				log.Printf("Usage exceeded %.0f%% threshold (%s), sending notification...", threshold, period)
 
 				err := m.discordNotifier.SendUsageAlert(stats)
 
 				if err != nil {
 					log.Printf("Failed to send Discord notification: %v", err)
 				} else {
-					log.Printf("Notification sent successfully for %.0f%% threshold", threshold)
-					m.lastNotified[threshold] = time.Now()
+					log.Printf("Notification sent successfully for %.0f%% threshold (%s)", threshold, period)
+					m.lastNotified[key] = time.Now()
 				}
 			}
 
@@ -128,14 +190,31 @@ func (m *Monitor) checkThresholds(stats *api.UsageStats) {
 	}
 }
 
-func (m *Monitor) shouldNotify(threshold float64) bool {
-	lastTime, exists := m.lastNotified[threshold]
+func containsThreshold(thresholds []float64, value float64) bool {
+	for _, t := range thresholds {
+		if t == value {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Monitor) shouldNotify(key ThresholdKey) bool {
+	lastTime, exists := m.lastNotified[key]
 	if !exists {
 		return true
 	}
 
-	// Don't send notifications more than once per hour for the same threshold
-	cooldownPeriod := 1 * time.Hour
+	// Use different cooldown periods based on usage period type
+	var cooldownPeriod time.Duration
+	if key.Period == "5-hour" {
+		// 5-hour period resets frequently, use shorter cooldown
+		cooldownPeriod = 30 * time.Minute
+	} else {
+		// 7-day period and "both" use longer cooldown
+		cooldownPeriod = 1 * time.Hour
+	}
+
 	return time.Since(lastTime) > cooldownPeriod
 }
 
